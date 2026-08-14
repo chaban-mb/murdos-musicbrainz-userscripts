@@ -4,13 +4,30 @@ import type { ArtistCredit, Release, Track } from '../../../types/importers';
 import type { DeezerAlbum, ParsedDeezerRelease } from '../types';
 
 /**
- * Formats track title matching legacy behavior: appends title_version (if present and not "(Original Mix)").
+ * Normalizes and cleans track titles by appending meaningful versions while stripping redundant original mix tags.
  */
-export function formatTrackTitle(titleShort: string, titleVersion?: string): string {
-    let title = titleShort;
-    if (titleVersion && !/^\s*\(Original Mix\)\s*$/i.test(titleVersion)) {
-        title += ` ${titleVersion}`;
+export function cleanTrackTitle(titleShort: string, titleVersion?: string): string {
+    let title = titleShort.trim();
+
+    // Strip redundant (Original Mix) or [Original Mix] baked into titleShort
+    title = title.replace(/\s*[([]\s*original mix\s*[)\]]\s*$/i, '').trim();
+
+    if (!titleVersion) {
+        return title;
     }
+
+    const trimmedVersion = titleVersion.trim();
+    if (/^[([\]]?\s*original mix\s*[)\]]?$/i.test(trimmedVersion)) {
+        return title;
+    }
+
+    // Wrap in parentheses if not already formatted with brackets/parentheses
+    const formattedVersion = /^[([{].*[)\]}]$/.test(trimmedVersion) ? trimmedVersion : `(${trimmedVersion})`;
+
+    if (!title.toLowerCase().includes(trimmedVersion.toLowerCase())) {
+        title += ` ${formattedVersion}`;
+    }
+
     return title;
 }
 
@@ -88,7 +105,7 @@ export function parseDeezerRelease(releaseUrl: string, data: DeezerAlbum): Parse
     for (const track of tracksData) {
         isrcs.push(track.isrc || null);
 
-        const trackTitle = formatTrackTitle(track.title_short, track.title_version);
+        const trackTitle = cleanTrackTitle(track.title_short || track.title, track.title_version);
         const mbTrack: Track = {
             number: track.track_position,
             title: trackTitle,
